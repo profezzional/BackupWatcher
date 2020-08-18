@@ -76,7 +76,7 @@ public class Watcher
 
             if (IsDirectory(path.Source))
             {
-                InitializeDirectory(path);
+                InitializeDirectory(path.Source, path.Target);
             }
             else if (IsFile(path.Source))
             {
@@ -85,21 +85,34 @@ public class Watcher
         }
     }
 
-    private void InitializeDirectory(SourcePathPair directoryPath)
+    private void InitializeDirectory(string sourcePath, string targetPath)
     {
-        Console.WriteLine("initializing " + directoryPath.Source);
+        Console.WriteLine("initializing " + sourcePath);
 
-        if (!Directory.Exists(directoryPath.Source))
+        if (!Directory.Exists(sourcePath))
         {
             return;
         }
 
-        if (!Directory.Exists(directoryPath.Target) || !TargetNeedsUpdate(new DirectoryInfo(directoryPath.Source), new DirectoryInfo(directoryPath.Target)))
+        if (IsInExcludedDirectory(sourcePath))
         {
-            CopyDirectory(directoryPath.Source, directoryPath.Target);
+            return;
         }
 
-        Console.WriteLine("initialized " + directoryPath.Source);
+        if (!Directory.Exists(targetPath) || TargetNeedsUpdate(new DirectoryInfo(sourcePath), new DirectoryInfo(targetPath)))
+        {
+            Console.WriteLine("Copying " + sourcePath);
+            CopyDirectory(sourcePath, targetPath);
+        }
+        else
+        {
+            foreach (var subdirectory in new DirectoryInfo(sourcePath).EnumerateDirectories())
+            {
+                InitializeDirectory(subdirectory.FullName, Path.Join(targetPath, subdirectory.Name));
+            }
+        }
+
+        Console.WriteLine("initialized " + sourcePath);
     }
 
     #region Directory Utils
@@ -136,6 +149,11 @@ public class Watcher
 
     private void CopyDirectory(string sourcePath, string targetPath)
     {
+        if (IsInExcludedDirectory(sourcePath))
+        {
+            return;
+        }
+
         Directory.CreateDirectory(targetPath);
 
         var sourceDirectoryInfo = new DirectoryInfo(sourcePath);
@@ -145,7 +163,7 @@ public class Watcher
             var targetFilePath = Path.Join(targetPath, sourceFile.Name);
             var targetFileInfo = new FileInfo(targetFilePath);
 
-            if (!File.Exists(targetFilePath) || !TargetNeedsUpdate(sourceFile, targetFileInfo))
+            if (!File.Exists(targetFilePath) || TargetNeedsUpdate(sourceFile, targetFileInfo))
             {
                 CopyFile(sourceFile.FullName, targetFilePath);
             }
@@ -155,7 +173,7 @@ public class Watcher
         {
             var targetSubdirectoryPath = Path.Join(targetPath, subdirectory.Name);
 
-            if (!Directory.Exists(targetSubdirectoryPath) || !TargetNeedsUpdate(subdirectory, new DirectoryInfo(targetSubdirectoryPath)))
+            if (!Directory.Exists(targetSubdirectoryPath) || TargetNeedsUpdate(subdirectory, new DirectoryInfo(targetSubdirectoryPath)))
             {
                 CopyDirectory(subdirectory.FullName, targetSubdirectoryPath);
             }
